@@ -182,25 +182,6 @@ with st.sidebar:
         else:
             st.error("O título não pode ser vazio.")
             
-    st.write("---")
-    st.write("🛠️ **Testes e Depuração**")
-    if st.button("Gerar Tarefa de Teste (-1 Mês)", use_container_width=True):
-        # Cria uma tarefa fictícia concluída há 30 dias atrás
-        data_passada = datetime.now() - timedelta(days=30)
-        tarefa_teste = {
-            "Código": gerar_codigo(),
-            "Titulo": "Tarefa Teste de Arquivamento Automático",
-            "Descrição": "Esta tarefa disparará o arquivamento.",
-            "Prioridade": "ALTA",
-            "Status": "CONCLUÍDA",
-            "Origem": "CHAMADO DO SISTEMA",
-            "Data": data_passada.strftime("%d/%m/%Y %H:%M:%S"),
-            "dataConclusao": data_passada.strftime("%d/%m/%Y %H:%M:%S")
-        }
-        st.session_state.tarefas.append(tarefa_teste)
-        salvar_dados(ARQUIVO_TAREFAS, st.session_state.tarefas)
-        st.rerun()
-
 tab_ativas, tab_arquivadas, tab_telemetria = st.tabs(["📋 Tarefas Ativas", "🗄️ Arquivadas & Histórico", "📈 Dashboard (Fase 3)"])
 
 with tab_ativas:
