@@ -240,7 +240,7 @@ with st.sidebar:
                         
                         # 4. Aplica a trava ou conclui
                         if bloqueio_prioridade:
-                            st.error("⚠️ Operação bloqueada: Há uma tarefa de maior prioridade em execução!")
+                            st.toast("⚠️ Operação bloqueada: Há uma tarefa de maior prioridade em execução!")
                         else:
                             tarefa_encontrada['Status'] = 'CONCLUÍDA'
                             tarefa_encontrada['dataConclusao'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
