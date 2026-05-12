@@ -218,16 +218,39 @@ with st.sidebar:
                         st.rerun()
     with col_b:
         if st.button("Concluir"):
-            if tarefa_alvo_str.isdigit():
-                alvo = int(tarefa_alvo_str)
-                for t in st.session_state.tarefas:
-                    if t['Código'] == alvo and t['Status'] != 'CONCLUÍDA':
-                        t['Status'] = 'CONCLUÍDA'
-                        t['dataConclusao'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            # 1. Busca a tarefa que queremos concluir a partir do input 'tarefa_alvo'
+            tarefa_encontrada = next((t for t in st.session_state.tarefas if t['Código'] == tarefa_alvo), None)
+            
+            if tarefa_encontrada:
+                if tarefa_encontrada['Status'] != 'CONCLUÍDA':
+                    # 2. Pega o "peso" da prioridade usando sua função (1 = Urgente, 4 = Baixa)
+                    peso_alvo = calcular_peso_tarefa(tarefa_encontrada)[1]
+                    
+                    # 3. Verifica se tem alguma tarefa mais importante em andamento
+                    bloqueio_prioridade = False
+                    for t in st.session_state.tarefas:
+                        if t['Status'] == 'FAZENDO':
+                            peso_t = calcular_peso_tarefa(t)[1]
+                            # Se o peso da tarefa FAZENDO for menor, a prioridade dela é mais alta
+                            if peso_t < peso_alvo:
+                                bloqueio_prioridade = True
+                                break
+                    
+                    # 4. Aplica a trava ou conclui
+                    if bloqueio_prioridade:
+                        st.error("⚠️ Operação bloqueada: Há uma tarefa de maior prioridade em execução!")
+                    else:
+                        tarefa_encontrada['Status'] = 'CONCLUÍDA'
+                        tarefa_encontrada['dataConclusao'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         salvar_dados(ARQUIVO_TAREFAS, st.session_state.tarefas)
                         st.success("Concluída!")
                         time.sleep(1)
                         st.rerun()
+                else:
+                    st.warning("Esta tarefa já está concluída.")
+            else:
+                if tarefa_alvo: # Evita mostrar erro se o usuário apertar o botão com o campo vazio
+                    st.error("Tarefa não encontrada.")
     with col_c:
         if st.button("🗑️ Excluir"):
             if tarefa_alvo_str.isdigit():
