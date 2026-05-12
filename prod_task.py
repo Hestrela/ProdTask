@@ -249,7 +249,7 @@ with st.sidebar:
                 else:
                     st.warning("Esta tarefa já está concluída.")
             else:
-                if tarefa_alvo: # Evita mostrar erro se o usuário apertar o botão com o campo vazio
+                if tarefa_alvo_str: # Evita mostrar erro se o usuário apertar o botão com o campo vazio
                     st.error("Tarefa não encontrada.")
     with col_c:
         if st.button("🗑️ Excluir"):
