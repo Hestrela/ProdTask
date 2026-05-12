@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
 import pandas as pd
 import random
@@ -18,7 +18,17 @@ def carregar_dados(arquivo):
     try:
         with open(arquivo, 'r', encoding='utf-8') as f:
             dados = json.load(f)
-            return dados if isinstance(dados, list) else []
+            if not isinstance(dados, list):
+                return []
+            
+            # Validação: Garante que os códigos sejam int mesmo se o JSON for adulterado
+            for t in dados:
+                try:
+                    t['Código'] = int(t['Código'])
+                except (ValueError, TypeError):
+                    # Se colocaram letras no JSON, gera um ID aleatório seguro
+                    t['Código'] = random.randint(10000, 99999) 
+            return dados
     except (json.JSONDecodeError, IOError):
         return []
 
@@ -30,7 +40,7 @@ def salvar_dados(arquivo, dados):
         st.error(f"Erro ao salvar: {e}")
 
 # ==========================================
-# ESTRUTURAS DE DADOS (FASE 1 DO PDF)
+# ESTRUTURAS DE DADOS
 # ==========================================
 class Pilha:
     def __init__(self):
@@ -53,7 +63,7 @@ class Fila:
         return len(self.itens) == 0
 
 # ==========================================
-# ORDENAÇÃO MANUAL (SELECTION SORT E QUICK SORT)
+# ALGORITMOS DE ORDENAÇÃO 
 # ==========================================
 def calcular_peso_tarefa(tarefa):
     """Calcula um valor numérico para ordenar por Status e Prioridade."""
@@ -64,20 +74,29 @@ def calcular_peso_tarefa(tarefa):
     p = ordem_prioridade.get(tarefa.get("Prioridade", "BAIXA"), 5)
     return (s, p)
 
-def selection_sort(arr):
-    """Ordenação manual O(n^2) com Selection Sort."""
+def selection_sort_por_data(arr):
+    """Ordenação O(n^2) focada na Data de Cadastro."""
     n = len(arr)
     arr_ordenado = arr.copy()
     for i in range(n):
         min_idx = i
         for j in range(i+1, n):
-            if calcular_peso_tarefa(arr_ordenado[j]) < calcular_peso_tarefa(arr_ordenado[min_idx]):
+            try:
+                data_j = datetime.strptime(arr_ordenado[j].get("Data", ""), "%d/%m/%Y %H:%M:%S")
+            except:
+                data_j = datetime.min
+            try:
+                data_min = datetime.strptime(arr_ordenado[min_idx].get("Data", ""), "%d/%m/%Y %H:%M:%S")
+            except:
+                data_min = datetime.min
+                
+            if data_j < data_min:
                 min_idx = j
         arr_ordenado[i], arr_ordenado[min_idx] = arr_ordenado[min_idx], arr_ordenado[i]
     return arr_ordenado
 
 def quick_sort(arr):
-    """Ordenação manual O(n log n) com Quick Sort."""
+    """Ordenação O(n log n) focada no peso (Prioridade/Status)."""
     if len(arr) <= 1:
         return arr
     pivo = arr[len(arr) // 2]
@@ -105,7 +124,6 @@ def executar_arquivamento():
         elif tarefa.get("Status") == "CONCLUÍDA" and tarefa.get("dataConclusao"):
             try:
                 data_conclusao = datetime.strptime(tarefa["dataConclusao"], "%d/%m/%Y %H:%M:%S")
-                # Se passou de 7 dias, marca para mover
                 if (data_atual - data_conclusao).days >= 7:
                     tarefa["Status"] = "ARQUIVADO"
                     mover = True
@@ -139,16 +157,16 @@ if 'pilha_desfazer' not in st.session_state:
 if 'telemetria' not in st.session_state:
     st.session_state.telemetria = []
 
-# Automação: Roda a verificação de arquivamento a cada interação do sistema
 qtd_arquivadas = executar_arquivamento()
 if qtd_arquivadas > 0:
     st.toast(f"🧹 {qtd_arquivadas} tarefa(s) arquivada(s) automaticamente pelo sistema!")
 
 def gerar_codigo():
     todas = st.session_state.tarefas + st.session_state.arquivadas
-    if not todas: return "001"
-    maior = max([int(t.get('Código', 0)) for t in todas if str(t.get('Código')).isdigit()], default=0)
-    return str(maior + 1).zfill(3)
+    if not todas: return 1
+    # Garante que vai buscar o maior código numérico apenas
+    maior = max([t.get('Código', 0) for t in todas if isinstance(t.get('Código'), int)], default=0)
+    return maior + 1
 
 # ==========================================
 # INTERFACE STREAMLIT
@@ -182,54 +200,112 @@ with st.sidebar:
         else:
             st.error("O título não pode ser vazio.")
             
-tab_ativas, tab_arquivadas, tab_telemetria = st.tabs(["📋 Tarefas Ativas", "🗄️ Arquivadas & Histórico", "📈 Dashboard (Fase 3)"])
-
-with tab_ativas:
-    st.subheader("Painel de Tarefas")
+    st.markdown("---")
+    st.header("⚡ Ações Rápidas")
+    tarefa_alvo_str = st.text_input("Cód. da Tarefa (Numérico):")
     
-    col_acoes, col_tabela = st.columns([1, 4])
-    
-    with col_acoes:
-        st.write("**Ações Rápidas**")
-        tarefa_alvo = st.text_input("Cód. da Tarefa:")
-        
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        if st.button("Executar"):
+            if tarefa_alvo_str.isdigit():
+                alvo = int(tarefa_alvo_str)
+                for t in st.session_state.tarefas:
+                    if t['Código'] == alvo and t['Status'] == 'PENDENTE':
+                        t['Status'] = 'FAZENDO'
+                        salvar_dados(ARQUIVO_TAREFAS, st.session_state.tarefas)
+                        st.success("Em execução!")
+                        time.sleep(1)
+                        st.rerun()
+    with col_b:
         if st.button("Concluir"):
-            for t in st.session_state.tarefas:
-                if t['Código'] == tarefa_alvo and t['Status'] != 'CONCLUÍDA':
-                    t['Status'] = 'CONCLUÍDA'
-                    t['dataConclusao'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                    salvar_dados(ARQUIVO_TAREFAS, st.session_state.tarefas)
-                    st.success("Concluída!")
-                    time.sleep(1)
-                    st.rerun()
-                    
-        if st.button("🗑️ Excluir (Pilha)"):
-            for i, t in enumerate(st.session_state.tarefas):
-                if t['Código'] == tarefa_alvo:
-                    removida = st.session_state.tarefas.pop(i)
-                    st.session_state.pilha_desfazer.empilhar(removida)
-                    salvar_dados(ARQUIVO_TAREFAS, st.session_state.tarefas)
-                    st.warning(f"Tarefa {tarefa_alvo} excluída.")
-                    time.sleep(1)
-                    st.rerun()
-                    
-        if not st.session_state.pilha_desfazer.vazia():
-            if st.button("⏪ Desfazer Exclusão"):
-                tarefa_recuperada = st.session_state.pilha_desfazer.desempilhar()
-                st.session_state.tarefas.append(tarefa_recuperada)
-                salvar_dados(ARQUIVO_TAREFAS, st.session_state.tarefas)
-                st.success("Tarefa restaurada!")
-                time.sleep(1)
-                st.rerun()
+            if tarefa_alvo_str.isdigit():
+                alvo = int(tarefa_alvo_str)
+                for t in st.session_state.tarefas:
+                    if t['Código'] == alvo and t['Status'] != 'CONCLUÍDA':
+                        t['Status'] = 'CONCLUÍDA'
+                        t['dataConclusao'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                        salvar_dados(ARQUIVO_TAREFAS, st.session_state.tarefas)
+                        st.success("Concluída!")
+                        time.sleep(1)
+                        st.rerun()
+    with col_c:
+        if st.button("🗑️ Excluir"):
+            if tarefa_alvo_str.isdigit():
+                alvo = int(tarefa_alvo_str)
+                for i, t in enumerate(st.session_state.tarefas):
+                    if t['Código'] == alvo:
+                        # Validação para não excluir tarefa em execução
+                        if t['Status'] == 'FAZENDO':
+                            st.error("Erro: Tarefa em execução não pode ser excluída!")
+                        else:
+                            removida = st.session_state.tarefas.pop(i)
+                            st.session_state.pilha_desfazer.empilhar(removida)
+                            salvar_dados(ARQUIVO_TAREFAS, st.session_state.tarefas)
+                            st.warning(f"Tarefa {alvo} excluída.")
+                            time.sleep(1)
+                            st.rerun()
+                            
+    st.markdown("---")
+    # Botão de desfazer sempre visível, mas desabilitado se a pilha estiver vazia
+    if st.button("⏪ Desfazer Exclusão", disabled=st.session_state.pilha_desfazer.vazia(), use_container_width=True):
+        tarefa_recuperada = st.session_state.pilha_desfazer.desempilhar()
+        st.session_state.tarefas.append(tarefa_recuperada)
+        salvar_dados(ARQUIVO_TAREFAS, st.session_state.tarefas)
+        st.success("Tarefa restaurada com sucesso!")
+        time.sleep(1)
+        st.rerun()
 
-    with col_tabela:
-        if st.session_state.tarefas:
-            # Usando a nova implementação do QUICK SORT para exibição principal
-            tarefas_exibicao = quick_sort(st.session_state.tarefas)
-            df = pd.DataFrame(tarefas_exibicao)
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("Nenhuma tarefa ativa no momento.")
+# Criação das guias separadas
+tab_cadastradas, tab_execucao, tab_arquivadas, tab_telemetria = st.tabs([
+    "📌 Tarefas Cadastradas", "⚙️ Em Execução", "🗄️ Histórico", "📈 Dashboard"
+])
+
+with tab_cadastradas:
+    st.subheader("Fila de Tarefas Pendentes")
+    
+    # 1. Filtra as pendentes
+    pendentes = [t for t in st.session_state.tarefas if t['Status'] == 'PENDENTE' or t['Status'] == 'CONCLUÍDA']
+    
+    # 2. Ordena por Data de Cadastro usando Selection Sort (Requisito do professor)
+    pendentes_ordenadas = selection_sort_por_data(pendentes)
+    
+    # 3. Cria as instâncias de Fila para cada prioridade
+    filas = {
+        "URGENTE": Fila(),
+        "ALTA": Fila(),
+        "MÉDIA": Fila(),
+        "BAIXA": Fila()
+    }
+    
+    # 4. Enfileira as tarefas
+    for t in pendentes_ordenadas:
+        if t['Prioridade'] in filas:
+            filas[t['Prioridade']].enfileirar(t)
+            
+    # 5. Desenfileira respeitando a prioridade para exibição
+    tarefas_para_exibicao = []
+    for prioridade in ["URGENTE", "ALTA", "MÉDIA", "BAIXA"]:
+        while not filas[prioridade].vazia():
+            tarefas_para_exibicao.append(filas[prioridade].desenfileirar())
+            
+    if tarefas_para_exibicao:
+        df_cadastradas = pd.DataFrame(tarefas_para_exibicao)
+        st.dataframe(df_cadastradas, use_container_width=True)
+    else:
+        st.info("Nenhuma tarefa pendente na fila.")
+
+with tab_execucao:
+    st.subheader("Tarefas Sendo Executadas")
+    
+    em_execucao = [t for t in st.session_state.tarefas if t['Status'] == 'FAZENDO']
+    
+    if em_execucao:
+        # Aplicação do Quick Sort diretamente na aplicação principal para ordenar o que está em execução
+        em_execucao_ordenada = quick_sort(em_execucao)
+        df_execucao = pd.DataFrame(em_execucao_ordenada)
+        st.dataframe(df_execucao, use_container_width=True)
+    else:
+        st.info("Nenhuma tarefa em execução no momento.")
 
 with tab_arquivadas:
     st.subheader("Relatório de Tarefas Arquivadas")
@@ -241,26 +317,25 @@ with tab_arquivadas:
 
 with tab_telemetria:
     st.header("Dashboard de Performance")
-    st.write("Gere dados fictícios para observar a diferença entre **O(n²)** e **O(n log n)** na prática.")
+    st.write("Teste de estresse comparando **Selection Sort** e **Quick Sort**.")
     
-    qtd = st.number_input("Adicionar tarefas para Teste de Stress:", min_value=10, max_value=5000, step=100)
+    qtd = st.number_input("Adicionar tarefas fictícias:", min_value=10, max_value=5000, step=100)
     
-    if st.button("Gerar e Medir Tempo de Ordenação"):
+    if st.button("Gerar e Medir"):
         dados_teste = []
         for i in range(qtd):
             dados_teste.append({
                 "Status": random.choice(["FAZENDO", "PENDENTE", "CONCLUÍDA"]),
                 "Prioridade": random.choice(["URGENTE", "ALTA", "MÉDIA", "BAIXA"]),
-                "Código": f"TEST-{i}"
+                "Código": i,
+                "Data": f"01/01/2026 12:00:00"
             })
             
-        # Medir Selection Sort
         inicio_selection = time.perf_counter()
-        selection_sort(dados_teste)
+        selection_sort_por_data(dados_teste)
         fim_selection = time.perf_counter()
         tempo_selection = (fim_selection - inicio_selection) * 1000
         
-        # Medir Quick Sort
         inicio_quick = time.perf_counter()
         quick_sort(dados_teste)
         fim_quick = time.perf_counter()
@@ -268,12 +343,11 @@ with tab_telemetria:
         
         st.session_state.telemetria.append({
             "Volume (n)": qtd,
-            "O(n²) - Selection Sort (ms)": tempo_selection,
-            "O(n log n) - Quick Sort (ms)": tempo_quick
+            "Selection Sort (ms)": tempo_selection,
+            "Quick Sort (ms)": tempo_quick
         })
         
     if st.session_state.telemetria:
         df_tel = pd.DataFrame(st.session_state.telemetria)
-        st.write("### Histórico de Latência")
         st.dataframe(df_tel)
         st.line_chart(df_tel.set_index("Volume (n)"))
