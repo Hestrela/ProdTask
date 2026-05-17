@@ -78,21 +78,33 @@ def selection_sort_por_data(arr):
     """Ordenação O(n^2) focada na Data de Cadastro."""
     n = len(arr)
     arr_ordenado = arr.copy()
+    
+    # Laço Externo: Controla a fronteira da ordenação
     for i in range(n):
         min_idx = i
+        
+        # 1. Tenta converter a data do elemento atual (i) UMA ÚNICA VEZ por ciclo externo
+        try:
+            data_min = datetime.strptime(arr_ordenado[min_idx].get("Data", ""), "%d/%m/%Y %H:%M:%S")
+        except:
+            data_min = datetime.min
+            
+        # Laço Interno: Varre a parte desordenada buscando o menor valor
         for j in range(i+1, n):
             try:
                 data_j = datetime.strptime(arr_ordenado[j].get("Data", ""), "%d/%m/%Y %H:%M:%S")
             except:
                 data_j = datetime.min
-            try:
-                data_min = datetime.strptime(arr_ordenado[min_idx].get("Data", ""), "%d/%m/%Y %H:%M:%S")
-            except:
-                data_min = datetime.min
                 
+            # 2. Se encontrar uma data menor, atualiza o índice E a data_min de referência
             if data_j < data_min:
                 min_idx = j
-        arr_ordenado[i], arr_ordenado[min_idx] = arr_ordenado[min_idx], arr_ordenado[i]
+                data_min = data_j  # ESSA LINHA É CRUCIAL!
+                
+        # 3. Troca simultânea elegante em Python (ocorre no final do laço externo)
+        if min_idx != i:
+            arr_ordenado[i], arr_ordenado[min_idx] = arr_ordenado[min_idx], arr_ordenado[i]
+            
     return arr_ordenado
 
 def quick_sort(arr):
